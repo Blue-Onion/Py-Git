@@ -8,8 +8,9 @@ from math import ceil
 import os
 import re 
 import sys
-
 import zlib
+
+
 argParser=argparse.ArgumentParser(description="Idiotic content tracker")
 argSubParser=argParser.add_subparsers(title="Command",dest="command")
 argSubParser.required=True
@@ -19,6 +20,29 @@ argSubParser.add_parser("check-ignore")
 argSubParser.add_parser("checkout")
 argSubParser.add_parser("commit")
 argSubParser.add_parser("hash-object")
+
+class gitRepo(object):
+    workTree=None
+    gitDir=None
+    conf=None
+    def __init__(self,path,force=false):
+        self.workTree=path
+        self.gitDir=os.pardir.join(self.workTree,".git")
+        if not (force or os.path.isdir(self.gitDir)):
+            raise Exception("No git directory found")
+        self.conf=configparser.ConfigParser()
+        cf=repo_file(self,conf)
+        if cf and os.path.exists(cf):
+            self.conf.read([cf])
+        elif not force:
+            raise Exception("Config File missing")
+        if not force:
+            ver=int(self.conf.get("core","repoFormatted"))
+            if ver!=0:
+                raise Exception("Version not supported")
+
+
+
 
 def main(argv=sys.argv[1:]):
     args=argParser.parse_args(argv)
