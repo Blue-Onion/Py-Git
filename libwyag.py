@@ -71,7 +71,19 @@ def repoDefaultConfig():
     return ret
     
 
-        
+def repoFind(path=".",required=True):
+    path=os.path.realpath(path)
+    if os.path.isdir(os.path.join(path,".git")):
+        return gitRepo(path)
+    parentPath=os.path.realpath(os.path.join(path,".."))
+    if parentPath==path:
+        if required:
+            raise Exception("No git found")
+        else:
+            return None
+    return repoFind(parentPath,required=required)
+
+
 
 def repoDir(repo,*path,mkdir=False):
     path=repoPath(repo,*path)
