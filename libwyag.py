@@ -59,15 +59,12 @@ def repoCreate(path):
         config.write(f)
     
     return repo
-
 def repoDefaultConfig():
     ret=configparser.ConfigParser()
     ret.add_section("core")
     ret.set("core","repoformatversion","0")
     ret.set("core","bare","false")
-    return ret
-    
-
+    return ret   
 def repoFind(path=".",required=True):
     path=os.path.realpath(path)
     if os.path.isdir(os.path.join(path,".git")):
@@ -80,8 +77,51 @@ def repoFind(path=".",required=True):
             return None
     return repoFind(parentPath,required=required)
 
+class gitObject(object):
+    def __init__(self,data=None):
+        if data!=None:
+            self.deserialize(data)
+        else:
+            self.init()
+    
+    def deserialize(self,data):
+        raise Exception("Not implemented")
+    def serialize(self,data):
+        raise Exception("Not implemented")
+    def init(self,data):
+        pass
 
-
+def objectRead(repo,sha):
+    path=repoFile(repo,"objects",sha[0:2],sha[2:])
+    if os.path.isfile(path):
+        return None
+    with open(path,"rb") as f:
+        raw=zlib.decompress(f.read())
+        x=raw.find(b' ')
+        fmt=raw[0:x]
+        y=raw.find(b"\x00",x)
+        size=int(raw[x:y].decode("ascii"))
+        if size!=len(raw)-y-1:
+            raise Exception(f"Malformed Object {sha}")
+        match fmt:
+            case b'commit' :c=GitCommit
+            case b"tree" :c=GitTree
+            case b"tag" :c=GitTag
+            case b"blob" :c=GitBlob
+            case _:
+                raise Exception(f"Unknown type {fmt.decode("ascii")}")
+        return c(raw[y+1:])
+def objectWrite(obj,repo=None):
+    data=obj.serialize()
+    #Add Header
+    res=obj.fmt+b""+str(len(data)).encode()+b"\x00"+data
+    sha=hashlib.sha1(res).hexdigest()
+    if repo:
+        path=repoFile(repo,"objects",sha[:2],sha[2:],mkdir=True)
+        if not os.path.exists(path):
+            with (path,"wb") as f:
+                f.write(zlib.compress(res))
+    return sha
 def repoDir(repo,*path,mkdir=False):
     path=repoPath(repo,*path)
     if os.path.exists(path):
