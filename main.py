@@ -29,6 +29,28 @@ class gitRepo(object):
             ver=int(self.conf.get("core","repoformatversion"))
             if ver!=0:
                 raise Exception("Version not supported")
+class gitObject(object):
+    def __init__(self,data=None):
+        if data!=None:
+            self.deserialize(data)
+        else:
+            self.init()
+    
+    def deserialize(self,data):
+        raise Exception("Not implemented")
+    def serialize(self,data):
+        raise Exception("Not implemented")
+    def init(self,data):
+        pass
+
+class GitBlob(gitObject):
+    fmt=b'blob'
+
+    def serialize(self):
+        return self.blobdata
+
+    def deserialize(self, data):
+        self.blobdata = data
 def repoPath(repo,*path):
     return os.path.join(repo.gitDir,*path)
 def repoFile(repo,*path,mkdir=False):
@@ -77,23 +99,10 @@ def repoFind(path=".",required=True):
             return None
     return repoFind(parentPath,required=required)
 
-class gitObject(object):
-    def __init__(self,data=None):
-        if data!=None:
-            self.deserialize(data)
-        else:
-            self.init()
-    
-    def deserialize(self,data):
-        raise Exception("Not implemented")
-    def serialize(self,data):
-        raise Exception("Not implemented")
-    def init(self,data):
-        pass
 
 def objectRead(repo,sha):
     path=repoFile(repo,"objects",sha[0:2],sha[2:])
-    if os.path.isfile(path):
+    if not os.path.isfile(path):
         return None
     with open(path,"rb") as f:
         raw=zlib.decompress(f.read())
@@ -111,15 +120,16 @@ def objectRead(repo,sha):
             case _:
                 raise Exception(f"Unknown type {fmt.decode("ascii")}")
         return c(raw[y+1:])
+
 def objectWrite(obj,repo=None):
     data=obj.serialize()
     #Add Header
-    res=obj.fmt+b""+str(len(data)).encode()+b"\x00"+data
+    res=obj.fmt+b" "+str(len(data)).encode()+b"\x00"+data
     sha=hashlib.sha1(res).hexdigest()
     if repo:
         path=repoFile(repo,"objects",sha[:2],sha[2:],mkdir=True)
         if not os.path.exists(path):
-            with (path,"wb") as f:
+            with open(path,"wb") as f:
                 f.write(zlib.compress(res))
     return sha
 def repoDir(repo,*path,mkdir=False):
@@ -137,33 +147,118 @@ def repoDir(repo,*path,mkdir=False):
 
 
 
-argParser=argparse.ArgumentParser(description="Idiotic content tracker")
-argSubParser=argParser.add_subparsers(title="Command",dest="command")
-argSubParser.required=True
-argsp=argSubParser.add_parser("init",help="Intialize new repo")
-argsp.add_argument("path",metavar="dir",nargs="?",default=".",help="Create new repo")
-
 def cmdInit(args):
     repoCreate(args.path)
-    
+def cmdHashObject(args):
+    repo = repoFind() if args.write else None
+
+    with open(args.path, "rb") as f:
+        data = f.read()
+
+    sha = objectHash(data, fmt=args.type.encode(), repo=repo)
+    print(sha)
+
+
+def objectHash(data, fmt, repo=None):
+    match fmt:
+        case b'commit': obj = GitCommit(data)
+        case b'tree':   obj = GitTree(data)
+        case b'tag':    obj = GitTag(data)
+        case b'blob':   obj = GitBlob(data)
+        case _: raise Exception(f"Unknown type {fmt}!")
+
+    return objectWrite(obj, repo)
+
+def catFile(repo,obj,fmt):
+    obj=objectRead(repo,objectFind(repo,obj,fmt=fmt))
+    sys.stdout.buffer.write(obj.serialize())
+def cmdCatFile(args):
+    repo=repoFind()
+    catFile(repo,args.object,fmt=args.type.encode())
+def objectFind(repo,name,fmt=None,follow=True):
+    return name
+
+argParser = argparse.ArgumentParser(description="Idiotic content tracker")
+
+# subcommands container
+argSubParser = argParser.add_subparsers(dest="command")
+argSubParser.required = True
+
+
+# ---------- init ----------
+init_parser = argSubParser.add_parser("init", help="Initialize new repo")
+init_parser.add_argument(
+    "path",
+    metavar="dir",
+    nargs="?",
+    default=".",
+    help="Where to create the repository"
+)
+
+
+# ---------- cat-file ----------
+cat_parser = argSubParser.add_parser(
+    "cat-file",
+    help="Provide content of repository objects"
+)
+
+cat_parser.add_argument(
+    "type",
+    choices=["blob", "commit", "tag", "tree"],
+    help="Specify the type"
+)
+
+cat_parser.add_argument(
+    "object",
+    help="The object to display"
+)
+
+
+# ---------- hash-object ----------
+hash_parser = argSubParser.add_parser(
+    "hash-object",
+    help="Compute object ID and optionally creates a blob from a file"
+)
+
+hash_parser.add_argument(
+    "-t",
+    dest="type",
+    choices=["blob", "commit", "tag", "tree"],
+    default="blob",
+    help="Specify the type"
+)
+
+hash_parser.add_argument(
+    "-w",
+    dest="write",
+    action="store_true",
+    help="Actually write the object into the database"
+)
+
+hash_parser.add_argument(
+    "path",
+    help="Read object from <file>"
+)
 def main(argv=sys.argv[1:]):
     args=argParser.parse_args(argv)
- 
-    match args.command:
-        case "add"          : cmdAdd(args)
-        case "cat-file"     : cmdCatFile(args)
-        case "check-ignore" : cmdCheckIgnore(args)
-        case "checkout"     : cmdCheckout(args)
-        case "commit"       : cmdCommit(args)
-        case "hash-object"  : cmdHashObject(args)
-        case "init"         : cmdInit(args)
-        case "log"          : cmdLog(args)
-        case "ls-files"     : cmdLsFiles(args)
-        case "ls-tree"      : cmdLsTree(args)
-        case "rev-parse"    : cmdRevParse(args)
-        case "rm"           : cmdRm(args)
-        case "show-ref"     : cmdShowRef(args)
-        case "status"       : cmdStatus(args)
-        case "tag"          : cmdTag(args)
-        case _              : print("Bad command.")
-    
+    try:
+
+        match args.command:
+            case "add"          : cmdAdd(args)
+            case "cat-file"     : cmdCatFile(args)
+            case "check-ignore" : cmdCheckIgnore(args)
+            case "checkout"     : cmdCheckout(args)
+            case "commit"       : cmdCommit(args)
+            case "hash-object"  : cmdHashObject(args)
+            case "init"         : cmdInit(args)
+            case "log"          : cmdLog(args)
+            case "ls-files"     : cmdLsFiles(args)
+            case "ls-tree"      : cmdLsTree(args)
+            case "rev-parse"    : cmdRevParse(args)
+            case "rm"           : cmdRm(args)
+            case "show-ref"     : cmdShowRef(args)
+            case "status"       : cmdStatus(args)
+            case "tag"          : cmdTag(args)
+            case _              : print("Bad command.")
+    except Exception as e:
+        print(e)
