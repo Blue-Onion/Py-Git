@@ -13,6 +13,7 @@ import zlib
 class gitRepo(object):
     workTree=None
     gitDir=None
+    
     conf=None
     def __init__(self,path,force=False):
         self.workTree=path
@@ -101,6 +102,7 @@ def cmdInit(args):
     repoCreate(args.path)
 def main(argv=sys.argv[1:]):
     args=argParser.parse_args(argv)
+    
     match args.command:
         case "add"          : cmd_add(args)
         case "cat-file"     : cmd_cat_file(args)
