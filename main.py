@@ -42,11 +42,18 @@ class gitObject(object):
         raise Exception("Not implemented")
     def init(self,data):
         pass
-
+class Gitcommit(object):
+    fmt=b'commit'
+    def deserialize(self,data):
+        self.kvlm=kvlmParse(data)
+    def serialize(self):
+        return kvlmSerialize(self.kvlm)
+    def init():
+        self.kvlm=dict()
 class GitBlob(gitObject):
     fmt=b'blob'
 
-    def serialize(self):
+    def serialize(self,data):
         return self.blobdata
 
     def deserialize(self, data):
@@ -57,6 +64,7 @@ def repoFile(repo,*path,mkdir=False):
     if repoDir(repo,*path[:-1],mkdir=mkdir):
         return repoPath(repo,*path)
 def repoCreate(path):
+
     repo=gitRepo(path,force=True)
     if os.path.exists(repo.workTree):
         if not os.path.isdir(repo.workTree):
@@ -178,6 +186,45 @@ def cmdCatFile(args):
 def objectFind(repo,name,fmt=None,follow=True):
     return name
 
+
+
+def kvlmParse(raw ,start=0,dct=None):
+    if not dct:
+        dct=dict()
+    spc=raw.find(b'',start)
+    nl=raw.find(b'\n',start)
+    if (spc<0)or (nl<spc):
+        assert nl==start
+        dct[None]=raw[start+1:]
+        return dct
+    key=raw[start:spc]
+    end=start
+    while True:
+        end=raw.find(b'\n',end+1)
+        if raw[end+1]!=ord(' '):break
+    value=raw[spc:end].replace(b'\n',b'\n')
+    if key in dct:
+        if type(dct[key]==list):
+            dct[key].append(value)
+        else:
+            dct[key]=[dct[key],value]
+    else:
+        dct[key]=value
+    return kvlmParse(raw,start=end+1,dct=dct)
+
+def kvlmSerialize(kvlm):
+    ret=b''
+    for k in kvlm.keys():
+        if k==None:
+            continue
+        val=kvlm[k]
+        if type(kvlm)!=list:
+            val=[val]
+        for v in val:
+            ret+=k+b''+(v.replace(b'\n',b'\n'))+b'\n'
+    ret+=b'\n'+kvlm[None]
+        
+    return ret
 argParser = argparse.ArgumentParser(description="Idiotic content tracker")
 
 # subcommands container
@@ -241,24 +288,25 @@ hash_parser.add_argument(
 )
 def main(argv=sys.argv[1:]):
     args=argParser.parse_args(argv)
+  
     try:
-
         match args.command:
-            case "add"          : cmdAdd(args)
-            case "cat-file"     : cmdCatFile(args)
-            case "check-ignore" : cmdCheckIgnore(args)
-            case "checkout"     : cmdCheckout(args)
-            case "commit"       : cmdCommit(args)
-            case "hash-object"  : cmdHashObject(args)
-            case "init"         : cmdInit(args)
-            case "log"          : cmdLog(args)
-            case "ls-files"     : cmdLsFiles(args)
-            case "ls-tree"      : cmdLsTree(args)
-            case "rev-parse"    : cmdRevParse(args)
-            case "rm"           : cmdRm(args)
-            case "show-ref"     : cmdShowRef(args)
-            case "status"       : cmdStatus(args)
-            case "tag"          : cmdTag(args)
-            case _              : print("Bad command.")
+                case "add"          : cmdAdd(args)
+                case "cat-file"     : cmdCatFile(args)
+                case "check-ignore" : cmdCheckIgnore(args)
+                case "checkout"     : cmdCheckout(args)
+                case "commit"       : cmdCommit(args)
+                case "hash-object"  : cmdHashObject(args)
+                case "init"         : cmdInit(args)
+                case "log"          : cmdLog(args)
+                case "ls-files"     : cmdLsFiles(args)
+                case "ls-tree"      : cmdLsTree(args)
+                case "rev-parse"    : cmdRevParse(args)
+                case "rm"           : cmdRm(args)
+                case "show-ref"     : cmdShowRef(args)
+                case "status"       : cmdStatus(args)
+                case "tag"          : cmdTag(args)
+                case _              : print("Bad command.")
+       
     except Exception as e:
         print(e)
