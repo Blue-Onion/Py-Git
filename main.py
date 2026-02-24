@@ -225,6 +225,16 @@ def kvlmSerialize(kvlm):
     ret+=b'\n'+kvlm[None]
         
     return ret
+
+def logGraphiz(repo,sha,seen):
+    if sha in seen:
+        return
+    seen.add(sha)
+    commit=objectRead(repo,sha)
+    message=commit.kvlm[None].decode("utf8").strip()
+    message=message.replace("\\","\\\\")
+    message = message.replace("\"", "\\\"")
+
 argParser = argparse.ArgumentParser(description="Idiotic content tracker")
 
 # subcommands container
