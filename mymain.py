@@ -30,7 +30,7 @@ class gitRepo(object):
             ver=int(self.conf.get("core","repositoryformatversion"))
             if ver!=0:
                 raise Exception(f"Invalid Version {ver}")
-
+class gitCommit(gitObject)
 def repoPath(repo,*path):
     return os.path.join(repo.gitDir,*path)
 
@@ -91,7 +91,46 @@ def repoDefaultConfig():
     ret.set("core","bare","false")
     return ret
 
+def kvlmParse(raw,start=0,dct=None):
+    if not dct:
+        dct=dict()
+    spc=raw.find(b' ',start)
+    nl=raw.find(b'\n',start)
+    if (spc<0)or (nl>start):
+        assert nl==start
+        dct[None]=raw[start+1:]
+        return dct
+    end=start
+    key=raw[start:spc]
+    while True:
+        end=raw.find(b'\n',end+1)
+        if raw[end+1]!=ord(" "):break
+    value = raw[spc+1:end].replace(b'\n ', b'\n')
+    if key in dct:
+        if type(dct[key])==list:
+            dct[key].append(value)
+        else:
+            dct[key]=[dct[key],value]
+    else:
+        dct[key]=value
+    return kvlmParse(raw,start=end+1,dct=dct)
+def kvlmSerialize(kvlm):
+    ret=b''
+    for k in kvlm.keys():
+        if k==None:continue
+        val=kvlm[k]
+        if type(kvlm[k])!=list:
+            val=[val]
+        for v in val:
+            ret+=v.replace(b'\n',b'\n ')
+    
+    ret+=b'\n'+kvlm[None]
+    
+    return ret
 
+
+
+    
 argParser=argparse.ArgumentParser(description="Idiotic content tracker")
 argSubParser=argParser.add_subparsers(title="Command",dest="command")
 argSubParser.required=True

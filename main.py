@@ -187,30 +187,31 @@ def objectFind(repo,name,fmt=None,follow=True):
     return name
 
 
-
-def kvlmParse(raw ,start=0,dct=None):
+def kvlmParse(raw,start=0,dct=None):
     if not dct:
         dct=dict()
-    spc=raw.find(b'',start)
-    nl=raw.find(b'\n',start)
-    if (spc<0)or (nl<spc):
+    spc=raw.replace(b' ')
+    nl=raw.replace(b'\n')
+    if spc<0 or nl<spc:
         assert nl==start
         dct[None]=raw[start+1:]
         return dct
     key=raw[start:spc]
     end=start
     while True:
-        end=raw.find(b'\n',end+1)
-        if raw[end+1]!=ord(' '):break
-    value=raw[spc:end].replace(b'\n',b'\n')
+        end+=raw.replace(b'\n',end+1)
+        if raw[end+1]==ord(" "):
+            break
+    value=raw[spc+1:end]
     if key in dct:
-        if type(dct[key]==list):
+        if type(dct[key])==list:
             dct[key].append(value)
         else:
             dct[key]=[dct[key],value]
     else:
         dct[key]=value
-    return kvlmParse(raw,start=end+1,dct=dct)
+
+    return dct
 
 def kvlmSerialize(kvlm):
     ret=b''
@@ -218,13 +219,13 @@ def kvlmSerialize(kvlm):
         if k==None:
             continue
         val=kvlm[k]
-        if type(kvlm)!=list:
+        if type(val)!=list:
             val=[val]
         for v in val:
-            ret+=k+b''+(v.replace(b'\n',b'\n'))+b'\n'
+            ret+=v.replace(b'\n',b'\n ')
     ret+=b'\n'+kvlm[None]
-        
-    return ret
+
+    return ret   
 
 def logGraphiz(repo,sha,seen):
     if sha in seen:
@@ -234,6 +235,27 @@ def logGraphiz(repo,sha,seen):
     message=commit.kvlm[None].decode("utf8").strip()
     message=message.replace("\\","\\\\")
     message = message.replace("\"", "\\\"")
+    if '\n' in message:
+        message=message[:message.index("\n")]
+    print(f"c_{sha} [label=\{sha[:7]}:{message}\]")
+    assert commit.fmt==b'commit'
+    if not b'parent' in commit.kvlm.keys():
+        return
+    parents=commit.kvlm[b'parent']
+    if type(parents)!="list":
+        parents=[parents]
+    for p in parents:
+        p=p.decode("ascii")
+        print (f"  c_{sha} -> c_{p};")
+        log_graphviz(repo, p, seen)
+
+def cmdLog(args):
+    repo=repoFind()
+    print("digraph wyaglog{")
+    print("  node[shape=rect]")
+    logGraphiz(repo, object_find(repo, args.commit), set())
+    print("}")
+
 
 argParser = argparse.ArgumentParser(description="Idiotic content tracker")
 
@@ -296,6 +318,12 @@ hash_parser.add_argument(
     "path",
     help="Read object from <file>"
 )
+#Log Parsers
+logParser = argsubparsers.add_parser("log", help="Display history of a given commit.")
+logParser.add_argument("commit",
+                   default="HEAD",
+                   nargs="?",
+                   help="Commit to start at.")
 def main(argv=sys.argv[1:]):
     args=argParser.parse_args(argv)
   
