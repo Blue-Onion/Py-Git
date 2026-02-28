@@ -42,14 +42,7 @@ class gitObject(object):
         raise Exception("Not implemented")
     def init(self,data):
         pass
-class Gitcommit(object):
-    fmt=b'commit'
-    def deserialize(self,data):
-        self.kvlm=kvlmParse(data)
-    def serialize(self):
-        return kvlmSerialize(self.kvlm)
-    def init():
-        self.kvlm=dict()
+
 class GitBlob(gitObject):
     fmt=b'blob'
 
@@ -106,8 +99,6 @@ def repoFind(path=".",required=True):
         else:
             return None
     return repoFind(parentPath,required=required)
-
-
 def objectRead(repo,sha):
     path=repoFile(repo,"objects",sha[0:2],sha[2:])
     if not os.path.isfile(path):
@@ -128,7 +119,6 @@ def objectRead(repo,sha):
             case _:
                 raise Exception(f"Unknown type {fmt.decode("ascii")}")
         return c(raw[y+1:])
-
 def objectWrite(obj,repo=None):
     data=obj.serialize()
     #Add Header
@@ -152,9 +142,6 @@ def repoDir(repo,*path,mkdir=False):
         return path
     else:
         return None
-
-
-
 def cmdInit(args):
     repoCreate(args.path)
 def cmdHashObject(args):
@@ -165,8 +152,6 @@ def cmdHashObject(args):
 
     sha = objectHash(data, fmt=args.type.encode(), repo=repo)
     print(sha)
-
-
 def objectHash(data, fmt, repo=None):
     match fmt:
         case b'commit': obj = GitCommit(data)
@@ -176,7 +161,6 @@ def objectHash(data, fmt, repo=None):
         case _: raise Exception(f"Unknown type {fmt}!")
 
     return objectWrite(obj, repo)
-
 def catFile(repo,obj,fmt):
     obj=objectRead(repo,objectFind(repo,obj,fmt=fmt))
     sys.stdout.buffer.write(obj.serialize())
@@ -186,75 +170,40 @@ def cmdCatFile(args):
 def objectFind(repo,name,fmt=None,follow=True):
     return name
 
-
-def kvlmParse(raw,start=0,dct=None):
+def kvlmParse(raw,start,dct=None):
     if not dct:
         dct=dict()
-    spc=raw.replace(b' ')
-    nl=raw.replace(b'\n')
+    spc=raw.find(b' ',start)
+    nl=raw.find(b'\n',start)
     if spc<0 or nl<spc:
         assert nl==start
-        dct[None]=raw[start+1:]
+        dct[None]==raw[start+1:]
         return dct
     key=raw[start:spc]
     end=start
     while True:
-        end+=raw.replace(b'\n',end+1)
-        if raw[end+1]==ord(" "):
-            break
-    value=raw[spc+1:end]
+        end=raw.find(b'\n',end+1)
+        if raw[end+1]==ord(" "):break
+    value=raw[spc+1:end].replace(b'\n ',b'\n')
     if key in dct:
         if type(dct[key])==list:
             dct[key].append(value)
         else:
-            dct[key]=[dct[key],value]
+            dct[key]==[dct[key],value]
     else:
         dct[key]=value
-
-    return dct
-
+    return kvlmParse(raw,start=end+1,dct=dct)
 def kvlmSerialize(kvlm):
     ret=b''
     for k in kvlm.keys():
-        if k==None:
-            continue
+        if k==None:continue
         val=kvlm[k]
-        if type(val)!=list:
-            val=[val]
-        for v in val:
-            ret+=v.replace(b'\n',b'\n ')
-    ret+=b'\n'+kvlm[None]
+        
+    return ret
 
-    return ret   
 
-def logGraphiz(repo,sha,seen):
-    if sha in seen:
-        return
-    seen.add(sha)
-    commit=objectRead(repo,sha)
-    message=commit.kvlm[None].decode("utf8").strip()
-    message=message.replace("\\","\\\\")
-    message = message.replace("\"", "\\\"")
-    if '\n' in message:
-        message=message[:message.index("\n")]
-    print(f"c_{sha} [label=\{sha[:7]}:{message}\]")
-    assert commit.fmt==b'commit'
-    if not b'parent' in commit.kvlm.keys():
-        return
-    parents=commit.kvlm[b'parent']
-    if type(parents)!="list":
-        parents=[parents]
-    for p in parents:
-        p=p.decode("ascii")
-        print (f"  c_{sha} -> c_{p};")
-        log_graphviz(repo, p, seen)
 
-def cmdLog(args):
-    repo=repoFind()
-    print("digraph wyaglog{")
-    print("  node[shape=rect]")
-    logGraphiz(repo, object_find(repo, args.commit), set())
-    print("}")
+
 
 
 argParser = argparse.ArgumentParser(description="Idiotic content tracker")
@@ -318,12 +267,7 @@ hash_parser.add_argument(
     "path",
     help="Read object from <file>"
 )
-#Log Parsers
-logParser = argsubparsers.add_parser("log", help="Display history of a given commit.")
-logParser.add_argument("commit",
-                   default="HEAD",
-                   nargs="?",
-                   help="Commit to start at.")
+
 def main(argv=sys.argv[1:]):
     args=argParser.parse_args(argv)
   
